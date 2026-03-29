@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canteen — Register</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="login-page">
+  <div class="login-box" style="max-width:400px">
+
+    <div style="text-align:center;font-size:36px;margin-bottom:4px">🍽️</div>
+    <h1>Create Account</h1>
+    <p>Register to access the canteen system</p>
+
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input class="form-control" id="reg-fullname" type="text" placeholder="E.g. Rahul Sharma">
+    </div>
+
+    <div class="form-group">
+      <label>Username *</label>
+      <input class="form-control" id="reg-username" type="text" placeholder="Choose a username">
+    </div>
+
+    <div class="form-group">
+      <label>Password *</label>
+      <input class="form-control" id="reg-password" type="password" placeholder="Minimum 6 characters">
+    </div>
+
+    <div class="form-group">
+      <label>Confirm Password *</label>
+      <input class="form-control" id="reg-confirm" type="password" placeholder="Re-enter your password">
+    </div>
+
+    <div class="form-group">
+      <label>Role</label>
+      <select class="form-control" id="reg-role">
+        <option value="staff">Staff</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Admin Secret Key *</label>
+      <input class="form-control" id="reg-secret" type="password" placeholder="Ask your administrator">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Required to create any account. Default key: <strong>canteen2024</strong></div>
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="doRegister()" id="reg-btn">Create Account</button>
+
+    <p class="error-msg" id="reg-error"></p>
+    <p id="reg-success" style="color:var(--accent);font-size:13px;margin-top:10px;text-align:center;display:none">
+      Account created! Redirecting to login...
+    </p>
+
+    <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text-muted)">
+      Already have an account? <a href="admin.html" style="color:var(--accent);text-decoration:none">Sign in here</a>
+    </p>
+
+  </div>
+</div>
+
+<script>
+async function doRegister() {
+  const fullname  = document.getElementById('reg-fullname').value.trim();
+  const username  = document.getElementById('reg-username').value.trim();
+  const password  = document.getElementById('reg-password').value;
+  const confirm   = document.getElementById('reg-confirm').value;
+  const role      = document.getElementById('reg-role').value;
+  const secret    = document.getElementById('reg-secret').value;
+
+  const errorEl   = document.getElementById('reg-error');
+  const successEl = document.getElementById('reg-success');
+  errorEl.textContent = '';
+  successEl.style.display = 'none';
+
+  // Frontend validations
+  if (!fullname)              return errorEl.textContent = 'Full name is required';
+  if (!username)              return errorEl.textContent = 'Username is required';
+  if (username.length < 3)   return errorEl.textContent = 'Username must be at least 3 characters';
+  if (!password)              return errorEl.textContent = 'Password is required';
+  if (password.length < 6)   return errorEl.textContent = 'Password must be at least 6 characters';
+  if (password !== confirm)   return errorEl.textContent = 'Passwords do not match';
+  if (!secret)                return errorEl.textContent = 'Admin secret key is required';
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating account...';
+
+  try {
+    const res = await fetch('http://localhost:3000/api/auth/register-open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, role, full_name: fullname, secret_key: secret })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Registration failed';
+    } else {
+      successEl.style.display = 'block';
+      setTimeout(() => { window.location.href = 'admin.html'; }, 2000);
+    }
+  } catch (err) {
+    errorEl.textContent = 'Cannot connect to server. Make sure npm start is running.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create Account';
+  }
+}
+
+// Allow pressing Enter on confirm field
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('reg-confirm').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doRegister();
+  });
+  document.getElementById('reg-secret').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doRegister();
+  });
+});
+</script>
+
+</body>
+</html>
