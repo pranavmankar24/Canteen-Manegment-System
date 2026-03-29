@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>College Canteen</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="header">
+  <span class="header-logo">🍽️</span>
+  <span class="header-title">College Canteen</span>
+  <nav class="header-nav">
+    <a href="admin.html">Staff Login →</a>
+  </nav>
+</header>
+
+<div class="page-wrap">
+  <div class="two-col">
+
+    <div>
+      <div class="section-title">Today's Menu</div>
+      <div id="menu-container"><p style="color:#999">Loading menu...</p></div>
+    </div>
+
+    <div class="card" style="position:sticky;top:68px">
+      <div class="card-header">
+        <h2>Your Order</h2>
+        <button class="btn btn-sm btn-secondary" onclick="clearCart()">Clear</button>
+      </div>
+
+      <div id="cart-items">
+        <div class="cart-empty">No items added yet</div>
+      </div>
+
+      <div class="cart-total-row">
+        <span>Total</span>
+        <span id="cart-total">₹0.00</span>
+      </div>
+
+      <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+        <div class="form-group">
+          <label>Your Name *</label>
+          <input class="form-control" id="customer-name" type="text" placeholder="Enter your name">
+        </div>
+        <div class="form-group">
+          <label>Payment Method</label>
+          <select class="form-control" id="payment-method">
+            <option value="cash">Cash at counter</option>
+            <option value="upi">UPI</option>
+            <option value="card">Card</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Special Instructions (optional)</label>
+          <input class="form-control" id="order-notes" type="text" placeholder="E.g. less spicy">
+        </div>
+        <button class="btn btn-primary btn-full" onclick="placeOrder()" id="order-btn">
+          Place Order
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal-backdrop" id="confirm-modal" style="display:none">
+  <div class="modal">
+    <div style="text-align:center;padding:8px 0">
+      <div style="font-size:40px;margin-bottom:8px">✅</div>
+      <h3 style="margin-bottom:6px">Order Placed!</h3>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Show this token at the counter</p>
+      <div style="background:var(--bg);border:2px dashed var(--border-mid);border-radius:8px;padding:16px;margin-bottom:16px">
+        <div style="font-size:12px;color:var(--text-muted);font-weight:600;text-transform:uppercase">Token Number</div>
+        <div id="token-display" style="font-size:48px;font-weight:800;color:var(--accent);line-height:1.1;margin:4px 0">-</div>
+        <div id="order-id-display" style="font-size:12px;color:var(--text-muted)">Order #-</div>
+      </div>
+      <div id="bill-summary" style="text-align:left;font-size:13px;border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:16px"></div>
+      <button class="btn btn-primary btn-full" onclick="closeConfirm()">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+<script>
+let cart = {};
+let menuItems = [];
+
+async function loadMenu() {
+  try {
+    menuItems = await apiFetch('/menu');
+    renderMenu();
+  } catch (err) {
+    document.getElementById('menu-container').innerHTML =
+      '<p style="color:red">Failed to load menu: ' + err.message + '</p>';
+  }
+}
+
+function renderMenu() {
+  const byCategory = {};
+  menuItems.forEach(item => {
+    (byCategory[item.category] = byCategory[item.category] || []).push(item);
+  });
+  const container = document.getElementById('menu-container');
+  container.innerHTML = '';
+
+  const categoryIcons = {
+    'Meals':     '🍱',
+    'Beverages': '☕',
+    'Snacks':    '🥪',
+    'Desserts':  '🍮'
+  };
+
+  for (const [cat, items] of Object.entries(byCategory)) {
+    const label = document.createElement('div');
+    label.className = 'category-label';
+    label.textContent = (categoryIcons[cat] || '') + '  ' + cat;
+    container.appendChild(label);
+
+    const grid = document.createElement('div');
+    grid.className = 'menu-grid';
+    grid.innerHTML = items.map(i => `
+      <div class="menu-card">
+        ${i.image_url
+          ? `<img
+               class="menu-card-img"
+               src="${i.image_url}"
+               alt="${i.name}"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+             />
+             <div class="menu-card-img-placeholder" style="display:none">
+               ${categoryIcons[i.category] || '🍽️'}
+             </div>`
+          : `<div class="menu-card-img-placeholder">${categoryIcons[i.category] || '🍽️'}</div>`
+        }
+        <div class="menu-card-body">
+          <div class="item-name">${i.name}</div>
+          <div class="item-price">${formatCurrency(i.price)}</div>
+          ${i.description
+            ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.4">${i.description}</div>`
+            : ''}
+          <button class="btn btn-primary btn-sm btn-full" onclick="addToCart(${i.id})">+ Add</button>
+        </div>
+      </div>`).join('');
+    container.appendChild(grid);
+  }
+}
+
+function addToCart(id) {
+  cart[id] = (cart[id] || 0) + 1;
+  renderCart();
+}
+function updateQty(id, delta) {
+  cart[id] = (cart[id] || 0) + delta;
+  if (cart[id] <= 0) delete cart[id];
+  renderCart();
+}
+function clearCart() {
+  cart = {};
+  renderCart();
+}
+
+function renderCart() {
+  const cartEl = document.getElementById('cart-items');
+  const entries = Object.entries(cart);
+  if (!entries.length) {
+    cartEl.innerHTML = '<div class="cart-empty">No items added yet</div>';
+    document.getElementById('cart-total').textContent = '₹0.00';
+    return;
+  }
+  let total = 0;
+  cartEl.innerHTML = entries.map(([id, qty]) => {
+    const item = menuItems.find(m => m.id == id);
+    if (!item) return '';
+    const sub = item.price * qty;
+    total += sub;
+    return '<div class="cart-item">' +
+      '<span class="cart-item-name">' + item.name + '</span>' +
+      '<div class="cart-item-right">' +
+        '<div class="qty-ctrl">' +
+          '<button class="btn-icon" onclick="updateQty(' + id + ',-1)">-</button>' +
+          '<span class="qty-val">' + qty + '</span>' +
+          '<button class="btn-icon" onclick="updateQty(' + id + ',+1)">+</button>' +
+        '</div>' +
+        '<span class="cart-item-price">' + formatCurrency(sub) + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('cart-total').textContent = formatCurrency(total);
+}
+
+async function placeOrder() {
+  const name = document.getElementById('customer-name').value.trim();
+  if (!name) { showToast('Please enter your name'); return; }
+  if (!Object.keys(cart).length) { showToast('Cart is empty'); return; }
+
+  const btn = document.getElementById('order-btn');
+  btn.disabled = true;
+  btn.textContent = 'Placing order...';
+
+  try {
+    const items = Object.entries(cart).map(([menu_item_id, quantity]) => ({
+      menu_item_id: parseInt(menu_item_id), quantity
+    }));
+    const data = await apiFetch('/orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        customer_name:  name,
+        items,
+        payment_method: document.getElementById('payment-method').value,
+        notes:          document.getElementById('order-notes').value.trim()
+      })
+    });
+    showConfirm(data);
+    clearCart();
+    document.getElementById('customer-name').value = '';
+    document.getElementById('order-notes').value = '';
+  } catch (err) {
+    showToast('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Place Order';
+  }
+}
+
+function showConfirm(data) {
+  document.getElementById('token-display').textContent = data.token_number;
+  document.getElementById('order-id-display').textContent = 'Order #' + data.order_id;
+  document.getElementById('bill-summary').innerHTML =
+    '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+      '<span style="color:var(--text-muted)">Total Amount</span>' +
+      '<strong>' + formatCurrency(data.total) + '</strong>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between">' +
+      '<span style="color:var(--text-muted)">Status</span>' +
+      '<span class="badge badge-pending">Pending</span>' +
+    '</div>';
+  document.getElementById('confirm-modal').style.display = 'flex';
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-modal').style.display = 'none';
+}
+
+loadMenu();
+</script>
+</body>
+</html>
